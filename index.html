@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="manifest" href="manifest.json">
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+  }
+</script>
+  <meta charset="UTF-8">
+  <title>Spin the Wheel (27 slots)</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+    }
+    canvas { background: #222; border-radius: 50%; }
+    #spin { margin: 20px; padding: 10px 20px; background: red; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; }
+    #winner { margin-top: 10px; font-size: 20px; font-weight: bold; }
+    #names { width: 300px; height: 200px; }
+    #apply { margin-top: 10px; padding: 8px 16px; background: red; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    #arrow {
+      width: 0; height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-top: 30px solid red; /* arrow points down */
+      position: relative;
+      top: 25px;
+    }
+  </style>
+</head>
+<body>
+  <div id="arrow"></div>
+  <canvas id="wheel" width="500" height="500"></canvas>
+  <button id="spin">SPIN</button>
+  <div id="winner">Winner: </div>
+
+  <p>Edit names (one per line) → click “Apply”</p>
+  <textarea id="names"></textarea><br>
+  <button id="apply">Apply</button>
+
+  <script>
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const spinBtn = document.getElementById("spin");
+    const winnerDiv = document.getElementById("winner");
+    const namesInput = document.getElementById("names");
+    const applyBtn = document.getElementById("apply");
+
+    let names = [
+      "Mulyono","Alfian","Fauzan","Pujo","Gio","Iqbal","Pingki",
+      "Junaedi","Alwi","Rendy","Rizaldy","Dede","Al","Dermawan",
+      "Ghazi","Hendro","Khoirul","King","Kurniawan","Andi","Faudzul",
+      "Muzakir","Rifki","Zulkifli","Reno","Ryanoval","Theo"
+    ];
+
+    // pointer angle (arrow pointing downward at top of canvas)
+    const pointerAngle = -Math.PI / 2;
+
+    let startAngle = 0;
+    let arc = Math.PI * 2 / names.length;
+    let spinning = false;
+
+    function drawWheel() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      arc = Math.PI * 2 / names.length;
+      for (let i = 0; i < names.length; i++) {
+        const angle = startAngle + i * arc;
+        ctx.beginPath();
+        ctx.fillStyle = `hsl(${i * (360/names.length)}, 100%, 50%)`;
+        ctx.moveTo(250, 250);
+        ctx.arc(250, 250, 250, angle, angle + arc);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(250, 250);
+        ctx.rotate(angle + arc / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "white";
+        // simple auto sizing for longer names
+        let fontSize = 16;
+        ctx.font = `bold ${fontSize}px Arial`;
+        // shrink font if it's too wide for the slice
+        const maxWidth = 250 * 0.52 * arc; // heuristic
+        while (ctx.measureText(names[i]).width > maxWidth && fontSize > 9) {
+          fontSize--;
+          ctx.font = `bold ${fontSize}px Arial`;
+        }
+        ctx.fillText(names[i], 230, 5);
+        ctx.restore();
+      }
+    }
+
+    // normalize helper
+    function mod(x, m) { return ((x % m) + m) % m; }
+
+    // NEW: robust timed animation that can be re-run multiple times
+    spinBtn.addEventListener("click", () => {
+      if (spinning) return;
+      spinning = true;
+      const N = names.length;
+      const arcLocal = Math.PI * 2 / N;
+
+      const targetIndex = Math.floor(Math.random() * N); // random target slot
+      const extraTurns = 4 + Math.floor(Math.random() * 4); // 4..7 extra full turns
+
+      // current angle
+      const current = startAngle;
+
+      // compute desired startAngle so that the center of target slice aligns with pointerAngle
+      const desired = pointerAngle - (targetIndex * arcLocal + arcLocal / 2);
+
+      // make final > current by adding whole rotations
+      let final = desired;
+      while (final <= current) final += Math.PI * 2;
+      final += extraTurns * Math.PI * 2;
+
+      const duration = 4200; // ms
+      const startTime = performance.now();
+
+      const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+      function animate(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const ease = easeOutCubic(t);
+        startAngle = current + (final - current) * ease;
+        drawWheel();
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          spinning = false;
+          // normalize startAngle to [0,2PI)
+          startAngle = mod(startAngle, Math.PI * 2);
+
+          // compute winner index: find which slice contains pointerAngle
+          // i such that pointerAngle in [startAngle + i*arc, startAngle + (i+1)*arc)
+          const raw = mod(pointerAngle - startAngle, Math.PI * 2);
+          const idx = Math.floor(raw / arcLocal);
+          const winner = names[(idx + names.length) % names.length];
+          winnerDiv.textContent = "Winner: " + winner;
+        }
+      }
+
+      requestAnimationFrame(animate);
+    });
+
+    applyBtn.addEventListener("click", () => {
+      const input = namesInput.value.trim().split("\n").map(n => n.trim()).filter(n => n);
+      if (input.length > 0) {
+        names = input;
+        arc = Math.PI * 2 / names.length;
+        // reset angle so drawing aligns predictably
+        startAngle = 0;
+        drawWheel();
+      }
+    });
+
+    drawWheel();
+    namesInput.value = names.join("\n");
+  </script>
+</body>
+</html>

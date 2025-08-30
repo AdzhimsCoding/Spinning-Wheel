@@ -1,0 +1,15 @@
+{
+  "name": "CNS Wheel of Names",
+  "short_name": "Wheel",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#111",
+  "theme_color": "#111",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1078x1080",
+      "type": "image/png"
+    }
+  ]
+}
